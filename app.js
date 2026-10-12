@@ -1,0 +1,213 @@
+// Lobby, karakter, room. Gameplay ada di game.js
+const sb = supabase.createClient(SB_URL, SB_KEY);
+const $ = id => document.getElementById(id);
+const SKINS = ['#f8d9b8','#e9b98a','#c68a5b','#8d5a3b','#5e3b26','#ffe0d0'];
+const OPTS = {
+  face: ['Senang','Datar','Kedip'],
+  hair: ['Botak','Pendek','Panjang','Jabrik'],
+  accessory: ['Tidak ada','Topi Koki','Kacamata','Bandana']
+};
+const LBL = {face:'Wajah', hair:'Rambut', accessory:'Aksesoris'};
+let me = null, room = null, roomPass = '', lobbyOpen = false, lobbyData = {};
+let cfg = {max:4, days:7, dur:180}, d = {};
+
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(t){const e=$('toast');e.textContent=t;e.style.display='block';clearTimeout(e._t);e._t=setTimeout(()=>e.style.display='none',2800)}
+function modal(h){$('mb').innerHTML=h;$('ov').classList.add('on')}
+function closeM(){$('ov').classList.remove('on');lobbyOpen=false}
+
+// ---------- AVATAR ----------
+function avatar(p, s=120){
+  const skin = SKINS.includes(p.skin) ? p.skin : SKINS[0];
+  const f=+p.face||0, h=+p.hair||0, a=+p.accessory||0;
+  let x=`<svg viewBox="0 0 100 100" width="${s}" height="${s}">`;
+  x+=`<rect x="22" y="72" width="56" height="34" rx="16" fill="#fff" stroke="#ddd"/>`;
+  x+=`<circle cx="50" cy="46" r="26" fill="${skin}"/>`;
+  if(h==1) x+=`<path d="M24 44a26 26 0 0 1 52 0c-10-12-42-12-52 0z" fill="#3b2a1a"/>`;
+  if(h==2) x+=`<path d="M24 46a26 26 0 0 1 52 0v26h-8V46c-10-10-26-10-36 0v26h-8z" fill="#3b2a1a"/>`;
+  if(h==3) x+=`<path d="M24 44l6-18 10 10 10-16 10 16 10-10 6 18c-14-10-38-10-52 0z" fill="#3b2a1a"/>`;
+  x+= f==2 ? `<path d="M35 46h10" stroke="#222" stroke-width="3"/>` : `<circle cx="40" cy="46" r="3" fill="#222"/>`;
+  x+=`<circle cx="60" cy="46" r="3" fill="#222"/>`;
+  x+= f==1 ? `<path d="M42 60h16" stroke="#222" stroke-width="3"/>` : `<path d="M40 57q10 9 20 0" stroke="#222" stroke-width="3" fill="none"/>`;
+  if(a==1) x+=`<path d="M30 30a10 10 0 0 1 8-14 12 12 0 0 1 24 0 10 10 0 0 1 8 14z" fill="#fff" stroke="#ccc"/>`;
+  if(a==2) x+=`<g fill="none" stroke="#222" stroke-width="2"><circle cx="40" cy="46" r="7"/><circle cx="60" cy="46" r="7"/><path d="M47 46h6"/></g>`;
+  if(a==3) x+=`<path d="M24 36h52v8H24z" fill="#dc2626"/>`;
+  return x+'</svg>';
+}
+
+// ---------- HOME ----------
+function showHome(){ $('roomv').classList.add('hide'); $('home').classList.remove('hide'); renderHome(); }
+function renderHome(){
+  $('home').innerHTML=`<h1>🍳 Game Kuliner</h1>
+  <div class="av" onclick="openChar()">${avatar(me,160)}</div><br>
+  <div class="name" onclick="openName()">${esc(me.name)} ✏️</div>
+  <button class="b1 big" onclick="openLobby()">MAIN</button>`;
+}
+
+// ---------- KARAKTER ----------
+function openChar(){
+  d={...me};
+  let h=`<h3>Karakter</h3><div id="pv" class="c">${avatar(d,140)}</div><p class="l">Warna kulit</p><div class="rw" id="o_skin">`
+    + SKINS.map(c=>`<button class="sw" style="background:${c}" onclick="pick('skin','${c}')"></button>`).join('')+'</div>';
+  for(const k of ['face','hair','accessory']){
+    h+=`<p class="l">${LBL[k]}</p><div class="rw" id="o_${k}">`
+      + OPTS[k].map((n,i)=>`<button class="ch" onclick="pick('${k}','${i}')">${n}</button>`).join('')+'</div>';
+  }
+  h+=`<div class="rw" style="margin-top:18px"><button class="b2" onclick="closeM()">Batal</button><button class="b1" onclick="saveChar()">Simpan</button></div>`;
+  modal(h); mark();
+}
+function pick(k,v){d[k]=v;$('pv').innerHTML=avatar(d,140);mark()}
+function mark(){
+  const cur={skin:SKINS.includes(d.skin)?d.skin:SKINS[0],face:+d.face||0,hair:+d.hair||0,accessory:+d.accessory||0};
+  for(const k in cur) [...$('o_'+k).children].forEach((b,i)=>b.classList.toggle('sel', k=='skin' ? SKINS[i]==cur[k] : i==cur[k]));
+}
+async function saveChar(){
+  const u={skin:d.skin,face:String(d.face),hair:String(d.hair),accessory:String(d.accessory)};
+  if(!SKINS.includes(u.skin)) u.skin=SKINS[0];
+  const {error}=await sb.from('players').update(u).eq('id',me.id);
+  if(error) return toast(error.message);
+  Object.assign(me,u); closeM(); renderHome();
+}
+
+// ---------- NAMA ----------
+function openName(){
+  modal(`<h3>Nama pemain</h3><input id="nm" maxlength="20" value="${esc(me.name)}" placeholder="Huruf atau angka">
+  <div class="rw" style="margin-top:14px"><button class="b2" onclick="closeM()">Batal</button><button class="b1" onclick="saveName()">Simpan</button></div>`);
+}
+async function saveName(){
+  const n=$('nm').value.trim();
+  if(!n) return toast('Nama tidak boleh kosong');
+  const {error}=await sb.from('players').update({name:n}).eq('id',me.id);
+  if(error) return toast(error.message);
+  me.name=n; closeM(); renderHome();
+}
+
+// ---------- LOBBY ----------
+function openLobby(){
+  lobbyOpen=true;
+  modal(`<h3>Main</h3><div class="top"><input id="q" placeholder="Cari ID / host" oninput="loadLobby()"><button class="b1" onclick="openAdd()">Add Room</button></div>
+  <div id="lobbyList" style="margin-top:10px"></div>
+  <div class="rw"><button class="b2" onclick="closeM()">Tutup</button></div>`);
+  loadLobby();
+}
+async function loadLobby(){
+  if(!lobbyOpen||!$('lobbyList')) return;
+  const {data}=await sb.from('lobby_rooms').select('*').neq('status','finished').limit(50);
+  const q=($('q').value||'').trim().toUpperCase();
+  const rows=(data||[]).filter(r=>!q||r.id.includes(q)||r.host_name.toUpperCase().includes(q)).slice(0,10);
+  lobbyData={}; rows.forEach(r=>lobbyData[r.id]=r);
+  $('lobbyList').innerHTML = rows.length ? rows.map(r=>{
+    const red=r.status!='waiting', cls=red?'bad':(r.has_password?'off':'ok');
+    return `<div class="rr" onclick="clickRoom('${r.id}')"><b>${r.id}</b><span>${esc(r.host_name)}</span><span>👥 ${r.player_count}/${r.max_players}</span><i class="dot ${cls}"></i>${red?`<button class="eye" onclick="event.stopPropagation();toast('Spectate dibuat di tahap berikutnya')">👁</button>`:'<span></span>'}</div>`;
+  }).join('') : '<p class="l c">Belum ada room. Buat dengan Add Room.</p>';
+}
+function clickRoom(id){
+  const r=lobbyData[id]; if(!r) return;
+  if(r.status!='waiting') return toast('Room sedang bermain');
+  r.has_password ? askPass(id) : joinRoom(id,'');
+}
+function askPass(id){
+  modal(`<h3>Room ${esc(id)}</h3><p class="l">Room ini memakai password</p><input id="jp" placeholder="Password" oninput="this.value=this.value.toUpperCase()">
+  <div class="rw" style="margin-top:14px"><button class="b2" onclick="closeM()">Batal</button><button class="b1" onclick="joinRoom('${esc(id)}',$('jp').value)">Gabung</button></div>`);
+}
+async function joinRoom(id,pass){
+  const {error}=await sb.rpc('join_room',{p_room_id:id,p_password:(pass||'').trim()||null});
+  if(error) return toast(error.message);
+  roomPass=''; closeM(); openRoom(id);
+}
+
+// ---------- ADD ROOM ----------
+function openAdd(){
+  cfg={max:4,days:7,dur:180};
+  modal(`<h3>Add Room</h3>
+  <div class="step"><span>Jumlah Pemain</span><span><button class="b2" onclick="step('max',-1)">−</button> <b id="v_max">4</b> <button class="b2" onclick="step('max',1)">+</button></span></div>
+  <div class="step"><span>Jumlah Hari</span><span><button class="b2" onclick="step('days',-1)">−</button> <b id="v_days">7</b> <button class="b2" onclick="step('days',1)">+</button></span></div>
+  <p class="l">Durasi per hari</p>
+  <div class="rw" id="durs">${[[120,'2 menit'],[180,'3 menit'],[300,'5 menit']].map(([v,n])=>`<button class="ch" data-v="${v}" onclick="setDur(${v})">${n}</button>`).join('')}</div>
+  <p class="l">Password (kosongkan = terbuka untuk umum)</p>
+  <input id="pw" maxlength="12" placeholder="Huruf dan angka" oninput="this.value=this.value.toUpperCase()">
+  <div class="rw" style="margin-top:16px"><button class="b2" onclick="openLobby()">Batalkan</button><button class="b1" onclick="createRoom()">Buat</button></div>`);
+  setDur(180);
+}
+function step(k,n){const L={max:[2,10],days:[3,30]}[k];cfg[k]=Math.min(L[1],Math.max(L[0],cfg[k]+n));$('v_'+k).textContent=cfg[k]}
+function setDur(v){cfg.dur=v;[...$('durs').children].forEach(b=>b.classList.toggle('sel',+b.dataset.v==v))}
+async function createRoom(){
+  const pw=$('pw').value.trim().toUpperCase();
+  if(pw&&!/^[A-Z0-9]+$/.test(pw)) return toast('Password hanya huruf dan angka');
+  const {data,error}=await sb.rpc('create_room',{p_max:cfg.max,p_days:cfg.days,p_duration:cfg.dur,p_password:pw||null});
+  if(error) return toast(error.message);
+  roomPass=pw; closeM(); openRoom(data);
+}
+
+// ---------- ROOM ----------
+function openRoom(id){ room={id}; $('home').classList.add('hide'); $('roomv').classList.remove('hide'); loadRoom(); }
+async function loadRoom(){
+  if(!room) return;
+  const [a,b]=await Promise.all([
+    sb.from('rooms').select('*').eq('id',room.id).maybeSingle(),
+    sb.from('room_players').select('player_id,joined_at,players(name,skin,face,hair,accessory)').eq('room_id',room.id).order('joined_at')
+  ]);
+  const r=a.data, m=b.data||[];
+  if(!r||!m.some(x=>x.player_id==me.id)){ room=null; return showHome(); }
+  room=r; if(r.status!=='waiting') return renderGame(m);
+  const host=room.host_id==me.id, hostName=(m.find(x=>x.player_id==room.host_id)||{players:{name:'?'}}).players.name;
+  $('roomv').innerHTML=`<div class="c"><h2 style="margin:0">Room ${esc(r.id)}</h2>
+  <p class="l">Host: ${esc(hostName)} · ${r.total_days} hari × ${r.day_duration_sec/60} menit · ${m.length}/${r.max_players} pemain</p>
+  <p>Password: <b>${r.has_password ? (roomPass||'(diatur host)') : 'Tidak ada'}</b></p>
+  <button class="b2" onclick="shareLink()">🔗 Bagikan link room</button></div>
+  <div style="margin:18px 0">${m.map(x=>`<div class="mem">${avatar(x.players,44)}<span>${esc(x.players.name)}</span>${x.player_id==room.host_id?'<span class="tag">HOST</span>':''}</div>`).join('')}</div>
+  <div class="rw">${host?'<button class="b1" onclick="startGame()">Mulai</button>':''}<button class="b2" onclick="askLeave()">Keluar</button></div>`;
+}
+function shareLink(){
+  const u=location.origin+location.pathname+'?room='+room.id;
+  (navigator.clipboard?navigator.clipboard.writeText(u):Promise.reject()).then(()=>toast('Link disalin')).catch(()=>prompt('Salin link ini:',u));
+}
+function askLeave(){
+  modal(`<h3>Anda yakin ingin keluar dari room?</h3><div class="rw"><button class="b1" onclick="leaveRoom()">YES</button><button class="b2" onclick="closeM()">NO</button></div>`);
+}
+async function leaveRoom(){
+  const id=room.id;
+  const {error}=await sb.rpc('leave_room',{p_room_id:id});
+  if(error) return toast(error.message);
+  closeM(); room=null; roomPass=''; showHome();
+}
+
+// ---------- MULAI ----------
+function listen(){
+  const f=()=>{ if(room) loadRoom(); if(lobbyOpen) loadLobby(); };
+  sb.channel('game')
+    .on('postgres_changes',{event:'*',schema:'public',table:'rooms'},f)
+    .on('postgres_changes',{event:'*',schema:'public',table:'room_players'},f)
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'players'},f)
+    .on('postgres_changes',{event:'*',schema:'public',table:'games'},f)
+    .on('postgres_changes',{event:'*',schema:'public',table:'gp'},f)
+    .on('postgres_changes',{event:'*',schema:'public',table:'mk'},f)
+    .on('postgres_changes',{event:'*',schema:'public',table:'inv'},f)
+    .subscribe();
+}
+async function init(){
+  if(SB_URL.startsWith('GANTI')) return document.body.innerHTML='<p style="padding:20px">Isi SB_URL dan SB_KEY di bagian atas file dulu.</p>';
+  let {data:{session}}=await sb.auth.getSession();
+  if(!session){
+    const r=await sb.auth.signInAnonymously();
+    if(r.error) return toast('Gagal login: '+r.error.message);
+    session=r.data.session;
+  }
+  const uid=session.user.id;
+  let {data}=await sb.from('players').select('*').eq('id',uid).maybeSingle();
+  if(!data){
+    const r=await sb.from('players').insert({id:uid,name:'Pemain'+Math.floor(Math.random()*900+100)}).select().single();
+    if(r.error) return toast(r.error.message);
+    data=r.data;
+  }
+  me=data; showHome(); listen();
+  const {data:mr}=await sb.from('room_players').select('room_id').eq('player_id',uid).maybeSingle();
+  if(mr) return openRoom(mr.room_id);
+  const q=(new URLSearchParams(location.search).get('room')||'').toUpperCase();
+  if(q){
+    const {data:r}=await sb.from('lobby_rooms').select('*').eq('id',q).maybeSingle();
+    if(!r) return toast('Room tidak ditemukan');
+    r.has_password ? askPass(q) : joinRoom(q,'');
+  }
+}
+init();
