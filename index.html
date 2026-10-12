@@ -51,10 +51,11 @@ input[type=text],input:not([type]){width:100%;padding:12px;border:1px solid var(
 <div id="ov"><div id="mb"></div></div>
 <div id="toast"></div>
 
+<script src="game.js"></script>
 <script>
 // ====== ISI DUA BARIS INI (Supabase > Project Settings > API) ======
-const SB_URL = 'https://wlaoaecgzcfqtzangigf.supabase.co';
-const SB_KEY = 'sb_publishable_lT5Z2xiq3XV7iQ0R0i2q9g_gyyrrcRI';
+const SB_URL = 'GANTI_DENGAN_PROJECT_URL';
+const SB_KEY = 'GANTI_DENGAN_ANON_KEY';
 // ===================================================================
 
 const sb = supabase.createClient(SB_URL, SB_KEY);
@@ -207,14 +208,14 @@ async function loadRoom(){
   ]);
   const r=a.data, m=b.data||[];
   if(!r||!m.some(x=>x.player_id==me.id)){ room=null; return showHome(); }
-  room=r;
+  room=r; if(r.status!=='waiting') return renderGame(m);
   const host=room.host_id==me.id, hostName=(m.find(x=>x.player_id==room.host_id)||{players:{name:'?'}}).players.name;
   $('roomv').innerHTML=`<div class="c"><h2 style="margin:0">Room ${esc(r.id)}</h2>
   <p class="l">Host: ${esc(hostName)} · ${r.total_days} hari × ${r.day_duration_sec/60} menit · ${m.length}/${r.max_players} pemain</p>
   <p>Password: <b>${r.has_password ? (roomPass||'(diatur host)') : 'Tidak ada'}</b></p>
   <button class="b2" onclick="shareLink()">🔗 Bagikan link room</button></div>
   <div style="margin:18px 0">${m.map(x=>`<div class="mem">${avatar(x.players,44)}<span>${esc(x.players.name)}</span>${x.player_id==room.host_id?'<span class="tag">HOST</span>':''}</div>`).join('')}</div>
-  <div class="rw">${host?'<button class="b1" onclick="toast(\'Gameplay dibuat di tahap berikutnya\')">Mulai</button>':''}<button class="b2" onclick="askLeave()">Keluar</button></div>`;
+  <div class="rw">${host?'<button class="b1" onclick="startGame()">Mulai</button>':''}<button class="b2" onclick="askLeave()">Keluar</button></div>`;
 }
 function shareLink(){
   const u=location.origin+location.pathname+'?room='+room.id;
@@ -237,6 +238,10 @@ function listen(){
     .on('postgres_changes',{event:'*',schema:'public',table:'rooms'},f)
     .on('postgres_changes',{event:'*',schema:'public',table:'room_players'},f)
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'players'},f)
+    .on('postgres_changes',{event:'*',schema:'public',table:'games'},f)
+    .on('postgres_changes',{event:'*',schema:'public',table:'gp'},f)
+    .on('postgres_changes',{event:'*',schema:'public',table:'mk'},f)
+    .on('postgres_changes',{event:'*',schema:'public',table:'inv'},f)
     .subscribe();
 }
 async function init(){
