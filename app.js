@@ -36,7 +36,7 @@ function avatar(p, s=120){
 }
 
 // ---------- HOME ----------
-function showHome(){ $('roomv').classList.add('hide'); $('home').classList.remove('hide'); renderHome(); }
+function showHome(){ stopWorld(); $('roomv').classList.add('hide'); $('home').classList.remove('hide'); renderHome(); }
 function renderHome(){
   $('home').innerHTML=`<h1>🍳 Game Kuliner</h1>
   <div class="av" onclick="openChar()">${avatar(me,160)}</div><br>
@@ -183,6 +183,7 @@ function listen(){
     .on('postgres_changes',{event:'*',schema:'public',table:'gp'},f)
     .on('postgres_changes',{event:'*',schema:'public',table:'mk'},f)
     .on('postgres_changes',{event:'*',schema:'public',table:'inv'},f)
+    .on('postgres_changes',{event:'*',schema:'public',table:'trades'},f)
     .subscribe();
 }
 async function init(){
