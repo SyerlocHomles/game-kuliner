@@ -1,5 +1,5 @@
 // Gameplay (dipakai oleh index.html). Memakai: sb, me, room, $, esc, toast, askLeave
-let G={},C={},Q={},tAt=0,rt=null;
+let G={},C={},Q={},tAt=0,rt=null,Z=null;
 const fm=n=>'Rp'+Number(n).toLocaleString('id-ID');
 const pr=(b,k=1)=>Math.round(b*(1+(G.g.mult-1)*k));
 const BOX='border:1px solid var(--line);border-radius:12px;padding:10px;margin:8px 0;background:#fff';
@@ -24,14 +24,15 @@ async function drawGame(){
     C.tools=Object.fromEntries((c.data||[]).map(x=>[x.id,x]));
   }
   const id=room.id;
-  const [g,p,v,m]=await Promise.all([
+  const [g,p,v,m,tr]=await Promise.all([
     sb.from('games').select('*').eq('room_id',id).maybeSingle(),
-    sb.from('gp').select('player_id,money,busy_until,players(name)').eq('room_id',id),
+    sb.from('gp').select('player_id,money,busy_until,players(name,skin)').eq('room_id',id),
     sb.from('inv').select('item,qty').eq('room_id',id).eq('player_id',me.id),
-    sb.from('mk').select('item,stock').eq('room_id',id)
+    sb.from('mk').select('item,stock').eq('room_id',id),
+    sb.from('trades').select('*').eq('room_id',id).eq('status','open')
   ]);
   if(!g.data||!p.data) return;
-  G.g=g.data; G.p=p.data;
+  G.g=g.data; G.p=p.data; G.tr=tr.data||[];
   G.inv=Object.fromEntries((v.data||[]).map(x=>[x.item,x.qty]));
   G.mk=Object.fromEntries((m.data||[]).map(x=>[x.item,x.stock]));
   if(!G.mem) G.mem=new Set(G.p.map(x=>x.player_id));
@@ -46,12 +47,11 @@ async function drawGame(){
     const g2=G.g;
     h=`<div class="c"><b>HARI ${g2.day}/${room.total_days}</b> · ⏱ <b id="cd"></b><br><small>${esc(g2.ev)} (harga ×${g2.mult})</small>
     <h3 style="margin:6px 0">${fm(mine.money)}</h3><small id="bz"></small></div>
-    <p class="l">MENU HARI INI</p>${g2.menu.map(card).join('')}
-    <p class="l">PASAR BAHAN (stok dibagi semua pemain)</p>${Object.values(C.items).map(itemRow).join('')}
-    <p class="l">PERALATAN</p>${Object.values(C.tools).map(toolRow).join('')}
-    <p class="l">PERINGKAT</p>${rh}${leave}`;
+    ${Z=='restoran'?'<p class="l">MENU HARI INI</p>'+g2.menu.map(card).join(''):''}
+    ${ZT[Z]&&Z!='alat'?'<p class="l">'+ZT[Z]+' (stok dibagi semua pemain)</p>'+Object.values(C.items).filter(i=>i.cat==Z).map(itemRow).join(''):''}${Z=='alat'?'<p class="l">TOKO ALAT</p>'+Object.values(C.tools).map(toolRow).join(''):''}${Z?'':'<p class="l c">Jalan ke 🍳 Restoran atau pasar (sayur, daging, bumbu, alat)</p>'}
+    ${tradePanel()}<p class="l">PERINGKAT</p>${rh}${leave}`;
   }
-  $('roomv').innerHTML=h;
+  if(!$('gp'))$('roomv').innerHTML='<div id="wd"></div><div id="gp"></div>'; $('gp').innerHTML=h; room.status=='playing'?startWorld():stopWorld();
   tickUI();
 }
 
@@ -86,3 +86,33 @@ function tickUI(){
   if(s<=0&&Date.now()-tAt>2500){tAt=Date.now();sb.rpc('tick',{p_room:room.id}).then(drawGame)}
 }
 setInterval(tickUI,1000);
+
+// ===== PASAR TERPISAH + TRADE =====
+const ZT={sayur:'PASAR SAYUR',daging:'PASAR DAGING & IKAN',bumbu:'PASAR BUMBU',alat:'TOKO ALAT'};
+const nm=id=>(G.p.find(x=>x.player_id==id)||{players:{name:'?'}}).players.name;
+const side=(o,m)=>[...Object.entries(o).map(([k,v])=>v+' '+(C.items[k]?C.items[k].name:k)),m?fm(m):''].filter(Boolean).join(' + ')||'-';
+function tradePanel(){
+  const near=typeof nearIds=='function'?nearIds():[];
+  let h='<p class="l">🤝 TRADE</p>';
+  (G.tr||[]).forEach(t=>{
+    h+=t.to_id==me.id
+      ?`<div style="${BOX}"><b>${esc(nm(t.from_id))}</b> menawarkan:<br>Memberi: ${esc(side(t.give,t.give_money))}<br>Meminta: ${esc(side(t.want,t.want_money))}<div class="rw"><button class="b2" onclick="ans('${t.id}',false)">Tolak</button><button class="b1" onclick="ans('${t.id}',true)">Terima</button></div></div>`
+      :`<div style="${BOX}">Menunggu ${esc(nm(t.to_id))}…<br><small>Beri ${esc(side(t.give,t.give_money))} · minta ${esc(side(t.want,t.want_money))}</small><div class="rw"><button class="b2" onclick="cancelT('${t.id}')">Batal</button></div></div>`;
+  });
+  h+=near.length?near.map(id=>`<div class="step"><span>👤 ${esc(nm(id))}</span><button class="b1" onclick="openTrade('${id}')">Trade</button></div>`).join(''):'<small class="l">Dekati pemain lain untuk trade.</small>';
+  return h;
+}
+function openTrade(id){
+  const opt=Object.values(C.items).map(i=>`<option value="${i.id}">${i.name}</option>`).join('');
+  const row=p=>`<div class="rw"><input id="${p}m" type="number" min="0" value="0" style="width:90px"><select id="${p}i" style="padding:10px;border-radius:12px"><option value="">(tanpa bahan)</option>${opt}</select><input id="${p}q" type="number" min="1" value="1" style="width:60px"></div>`;
+  modal(`<h3>Trade dengan ${esc(nm(id))}</h3><p class="l">Kamu BERI (uang / bahan / jumlah)</p>${row('g')}<p class="l">Kamu MINTA (uang / bahan / jumlah)</p>${row('w')}<small>Uang dengan bahan = jual/beli. Bahan dengan bahan = barter.</small><div class="rw" style="margin-top:14px"><button class="b2" onclick="closeM()">Batal</button><button class="b1" onclick="sendTrade('${id}')">Kirim</button></div>`);
+}
+async function sendTrade(id){
+  const rd=p=>{const k=$(p+'i').value,q=Math.max(1,+$(p+'q').value||1);return [k?{[k]:q}:{},Math.max(0,+$(p+'m').value||0)]};
+  const [g,gm]=rd('g'),[w,wm]=rd('w');
+  const {error}=await sb.rpc('offer_trade',{p_room:room.id,p_to:id,p_give:g,p_gm:gm,p_want:w,p_wm:wm});
+  if(error) return toast(error.message);
+  closeM(); toast('Penawaran terkirim'); drawGame();
+}
+const ans=(id,ok)=>rp('answer_trade',{p_id:id,p_accept:ok});
+const cancelT=id=>rp('cancel_trade',{p_id:id});
