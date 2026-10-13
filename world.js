@@ -8,6 +8,9 @@ const ZN={
  alat:{x:45,w:8,c:'#d9dcec',r:'#4f46e5',n:'🔧 ALAT',s:['🍳','🔪','♨️']}
 };
 let WD=null;
+const IM={};
+['char-walk','char-idle','house','tree'].forEach(n=>{const i=new Image();i.src='assets/'+n+'.png';IM[n]=i});
+const ok=i=>i&&i.complete&&i.naturalWidth>0;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const KM={ArrowLeft:'l',a:'l',ArrowRight:'r',d:'r'};
 addEventListener('keydown',e=>{if(WD&&KM[e.key]&&!/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)){WD.k[KM[e.key]]=1;e.preventDefault()}});
@@ -62,6 +65,17 @@ function loop(t){
 }
 function who(id){const r=G.p&&G.p.find(x=>x.player_id==id);return r?r.players:{name:'?',skin:null}}
 function sprite(g,cx,fy,u,id,mine,f,mv,ph){
+  const im=mv?IM['char-walk']:IM['char-idle'];
+  if(ok(im)){
+    const s=2*u, fr=mv?Math.floor(ph)%6:Math.floor(WD.t/300)%4, p=who(id);
+    g.fillStyle='#0003'; g.fillRect(cx-7*s,fy-1.5*s,14*s,3*s);
+    g.save(); g.translate(cx,0); if(f>0)g.scale(-1,1);
+    g.drawImage(im,fr*32,64,32,32,-16*s,fy-26*s,32*s,32*s);
+    g.restore();
+    g.font='bold 11px monospace'; g.textAlign='center'; g.fillStyle=mine?'#ea580c':'#3b2a1a';
+    g.fillText(p.name,cx,fy-22*s); g.textAlign='left';
+    return;
+  }
   const p=who(id), sk=SKINS.includes(p.skin)?p.skin:SKINS[0], sw=mv?Math.sin(ph)*2*u:0, ex=f>0?1:-1;
   g.fillStyle='#0003'; g.fillRect(cx-8*u,fy-1.5*u,16*u,3*u);
   g.fillStyle='#3b2a1a'; g.fillRect(cx-5*u+sw,fy-8*u,4*u,8*u); g.fillRect(cx+1*u-sw,fy-8*u,4*u,8*u);
@@ -84,6 +98,13 @@ function draw(){
   g.fillStyle='#6abe45'; g.fillRect(0,fy,CW,sc*.25);
   for(const k in ZN){
     const a=ZN[k], bx=a.x*sc+ox, bw=a.w*sc, bh=(k=='restoran'?6:4.5)*sc, by=fy-bh;
+    if(k=='restoran'&&ok(IM.house)){
+      const s=2*u;
+      g.drawImage(IM.house,148,3,72,95,bx+bw/2-36*s,fy-95*s,72*s,95*s);
+      g.font=`bold ${Math.max(10,sc*.45)}px monospace`; g.fillStyle=Z==k?'#ea580c':'#3b2a1a'; g.textAlign='center';
+      g.fillText(a.n,bx+bw/2,fy-96*s); g.textAlign='left';
+      continue;
+    }
     g.fillStyle=a.c; g.fillRect(bx,by,bw,bh);
     g.strokeStyle=Z==k?'#ea580c':'#3b2a1a'; g.lineWidth=Math.max(2,sc/12); g.strokeRect(bx,by,bw,bh);
     g.fillStyle=a.r; g.fillRect(bx-sc*.3,by-sc*.6,bw+sc*.6,sc*.6);
@@ -91,6 +112,7 @@ function draw(){
     g.font=`bold ${Math.max(9,sc*.4)}px monospace`; g.fillStyle='#3b2a1a'; g.fillText(a.n,bx+sc*.3,by+sc*.95);
     g.font=`${sc*.9}px serif`; a.s.forEach((e,i)=>g.fillText(e,bx+sc*.6+i*(bw-sc*1.6)/Math.max(1,a.s.length-1),fy-sc*.85));
   }
+  if(ok(IM.tree)){const s=2*u;[13,23.9,33.9,43.9,54].forEach(x=>g.drawImage(IM.tree,96,1,32,46,x*sc+ox-16*s,fy-46*s,32*s,46*s))}
   const now=Date.now();
   for(const id in WD.o){
     const o=WD.o[id];
