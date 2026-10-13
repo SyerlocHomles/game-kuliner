@@ -69,7 +69,7 @@ function sprite(g,cx,fy,u,id,mine,f,mv,ph){
   if(ok(im)){
     const s=2*u, fr=mv?Math.floor(ph)%6:Math.floor(WD.t/300)%4, p=who(id);
     g.fillStyle='#0003'; g.fillRect(cx-7*s,fy-1.5*s,14*s,3*s);
-    g.save(); g.translate(cx,0); if(f>0)g.scale(-1,1);
+    g.save(); g.translate(cx,0); if(f<0)g.scale(-1,1);
     g.drawImage(im,fr*32,64,32,32,-16*s,fy-26*s,32*s,32*s);
     g.restore();
     g.font='bold 11px monospace'; g.textAlign='center'; g.fillStyle=mine?'#ea580c':'#3b2a1a';
