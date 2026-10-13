@@ -9,8 +9,16 @@ const ZN={
 };
 let WD=null;
 const IM={};
-['char-walk','char-idle','house','tree'].forEach(n=>{const i=new Image();i.src='assets/'+n+'.png';IM[n]=i});
+['char-walk','char-idle','house','tree','cleanstore'].forEach(n=>{const i=new Image();i.src='assets/'+n+'.png';IM[n]=i});
 const ok=i=>i&&i.complete&&i.naturalWidth>0;
+const TC={};
+function tint(img,col){
+  if(TC[col]) return TC[col];
+  const c=document.createElement('canvas'); c.width=img.naturalWidth; c.height=img.naturalHeight;
+  const x=c.getContext('2d'); x.drawImage(img,0,0);
+  x.globalCompositeOperation='source-atop'; x.globalAlpha=.28; x.fillStyle=col; x.fillRect(0,0,c.width,c.height);
+  return TC[col]=c;
+}
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const KM={ArrowLeft:'l',a:'l',ArrowRight:'r',d:'r'};
 addEventListener('keydown',e=>{if(WD&&KM[e.key]&&!/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)){WD.k[KM[e.key]]=1;e.preventDefault()}});
@@ -103,6 +111,19 @@ function draw(){
       g.drawImage(IM.house,148,3,72,95,bx+bw/2-36*s,fy-95*s,72*s,95*s);
       g.font=`bold ${Math.max(10,sc*.45)}px monospace`; g.fillStyle=Z==k?'#ea580c':'#3b2a1a'; g.textAlign='center';
       g.fillText(a.n,bx+bw/2,fy-96*s); g.textAlign='left';
+      continue;
+    }
+    if(k!='restoran'&&ok(IM.cleanstore)){
+      const s=2*u, st=tint(IM.cleanstore,a.r);
+      [.27,.73].forEach((p,i)=>{
+        const sx=bx+bw*p-26*s, sy=fy-44*s;
+        g.drawImage(st,sx,sy,52*s,44*s);
+        g.font=`${13*s}px serif`; g.textAlign='center'; g.fillStyle='#000';
+        g.fillText(a.s[i],sx+26*s,sy+27*s); g.textAlign='left';
+      });
+      if(Z==k){g.fillStyle='#ea580c'; g.fillRect(bx,fy-2*s,bw,2*s)}
+      g.font=`bold ${Math.max(10,sc*.45)}px monospace`; g.fillStyle=Z==k?'#ea580c':'#3b2a1a'; g.textAlign='center';
+      g.fillText(a.n,bx+bw/2,fy-48*s); g.textAlign='left';
       continue;
     }
     g.fillStyle=a.c; g.fillRect(bx,by,bw,bh);
